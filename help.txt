@@ -1,0 +1,31 @@
+
+  fenestrate
+  ----------
+
+  Flatten the dependency graph for your NPM package so that it's less likely
+  to bump up against the 260-char path limit on Windows. Does not assign blame
+  or bloviate about whose responsibility this whole mess is.
+
+  Usage:
+
+  C:/some/long/path/to/module/> fenestrate .
+
+    Updates the package.json file in the current directory and rewrites your
+    node_modules directory to
+    be shallower.
+
+  Options:
+
+  -u      Defenestrate! Reformats your package.json to be as it once was.
+
+  -U      Defenestrate and also rewrite your node_modules directory to be
+          deeper. Completely erase the past, and with it, your regrets.
+
+  -d      Dry run. Describe the changes that would be made to the dependency
+          graph, but don't make them.
+
+  -h      Print this help text.
+  
+  You must always give fenestrate a path. It can be an absolute or relative
+  path, but it will never assume you should use the working directory, since
+  its operation is (reversibly) destructive.
