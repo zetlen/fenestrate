@@ -1,0 +1,10 @@
+{
+  "name": "fenestrate",
+  "title": "fenestrate",
+  "author": "James Zetlen",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zetlen/fenestrate.git"
+  }
+}
