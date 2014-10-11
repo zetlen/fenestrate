@@ -6,26 +6,37 @@
   to bump up against the 260-char path limit on Windows. Does not assign blame
   or bloviate about whose responsibility this whole mess is.
 
+  **The package needs to be fully installed before fenestrate configuration 
+  creation will work. Run `npm install` before `fenestrate` if you haven't
+  already installed the module in place. `fenestrate rewrite` on the other hand
+  does not require installation first.**
+
   Usage:
 
-  C:/some/long/path/to/module/> fenestrate .
+  C:/some/long/path/to/module/> fenestrate create .
 
-    Updates the package.json file in the current directory and rewrites your
-    node_modules directory to
-    be shallower.
+    
 
-  Options:
+  Commands:
 
-  -u      Defenestrate! Reformats your package.json to be as it once was.
+  make      Updates the package.json file in the current directory to contain a
+            __fenestrate configuration that can be used to rewrite the
+            node_modules directory later, using `fenestrate rewrite`.
 
-  -U      Defenestrate and also rewrite your node_modules directory to be
-          deeper. Completely erase the past, and with it, your regrets.
+  rewrite   Rewrite package.json and node_modules directory to use the flatter
+            dependency graph present in the __fenestrate configuration.
 
-  -d      Dry run. Describe the changes that would be made to the dependency
-          graph, but don't make them.
+  restore   Defenestrate! Undo the changes written to your module directory by
+            `fenestrate rewrite`.
 
-  -h      Print this help text.
+  remove    Remove the __fenestrate configuration from package.json.
+
+  dry-run   Describe the changes that would be made to package.json, but don't
+            make them.
+
+  help      
+  -h        Print this help text.
   
   You must always give fenestrate a path. It can be an absolute or relative
   path, but it will never assume you should use the working directory, since
-  its operation is (reversibly) destructive.
+  its operations can be (reversibly) destructive.

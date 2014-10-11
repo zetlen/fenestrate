@@ -1,131 +1,198 @@
 var fs = require('fs'),
-    _ = require('underscore'),
     path = require('path'),
     rimraf = require('rimraf'),
     childProcess = require("child_process"),
-    minimist = require('minimist'),
     cmdArgs = process.argv.slice(2),
-    args = minimist(cmdArgs, {
-      boolean: ['u','U','d','h']
-    }),
-    helpText = fs.readFileSync('./help.txt', 'utf-8'),
-    dependencyTypes = ["dependencies","devDependencies"],
-    modulePath;
+    cmd = cmdArgs.shift(),
+    modulePath = cmdArgs.shift(),
+    helpText = fs.readFileSync(path.resolve(__dirname, './help.txt'), 'utf-8'),
+    dependencyTypes = ["dependencies","devDependencies"];
 
-
-if (args.h) {
+if (cmd === "help" || cmd === "-h" || !cmd) {
   console.log(helpText);
   process.exit(0);
 }
 
-if (cmdArgs.length === 0 || args._.length === 0) {
+if (!modulePath) {
   console.error("\n  You must provide a path!\n\n");
   console.log(helpText);
   process.exit(1);
 }
 
-if (args._.length > 1) {
-  console.error("\n  Multiple non-flag arguments detected. You must provide only one path.");
-  process.exit(1);
+if (cmdArgs > 1) {
+  die("\n  Multiple non-flag arguments detected. You must provide only one path.");
 }
 
-modulePath = args._.pop();
+modulePath = path.resolve(modulePath);
 
-var pkgPath = path.resolve(modulePath, './package.json'),
-    pkg = require(pkgPath),
-    declaredDeps = {};
-    dependencyTypes.forEach(function(type) {
-      declaredDeps[type] = _.clone(pkg[type]);
-    });
+if (!fs.existsSync(modulePath)) {
+  die('Path "' + modulePath + '" does not exist.');
+}
 
-if (args.u || args.U) {
-  console.log("Defenestrating package.json");
-  var fenestrateNode = pkg.__fenestrate;
-  if (!fenestrateNode) {
-    console.error("Could not find the __fenestrate property in your package.json, so could not defenestrate.\nHas this module ever been fenestrated?");
-    process.exit(1);
-  }
-  if (!fenestrateNode.previous) {
-    console.error("Could not find the previous collection of dependency tyes, so could not defenestrate.");
-    process.exit(1);
-  }
-  dependencyTypes.forEach(function(type) {
-    if (pkg[type] && !fenestrateNode.previous[type]) {
-      console.error("Could not find the previous collection of " + type + ", so could not defenestrate.")
-      process.exit(1);
-    }
-  });
-  dependencyTypes.forEach(function(type) {
-    console.log("Defenestrating " + type);
-    pkg[type] = fenestrateNode.previous[type];
-  });
-  delete pkg.__fenestrate;
-  console.log("Completed defenestration of package.json. Writing file...")
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-  if (args.U) {
-    console.log("Rewriting node_modules directory...")
-    removeNodeModulesDir(function() {
-      console.log("Removed existing node_modules directory. Making new one...")
-      npmInstall(function(code) {
-        if (code !== 0) {
-          console.error("Error building old node_modules directory. Could not continue.");
-          process.exit(1);
-        }
-        console.log("Installed old node_modules directory, pre-fenestration.")
-        process.exit(0);
-      });
-    });
+if (!fs.existsSync(path.resolve(modulePath, './node_modules')) && cmd === "make") {
+  die('The node_modules directory is not present in "' + modulePath + '". Cannot run `fenestrate make` until the package has been installed.');
+}
+
+
+function flattener(conf, dep, declared, depType) {
+  var sv = conf.from.split('@').pop();
+  if (!declared.hasOwnProperty(dep)) {
+    console.log('Adding dependency "' + dep + '" at semver "' + sv + '" to ' + depType);
+    declared[dep] = sv;
   } else {
-    process.exit(0);
+    console.log('Skipping dependency "' + dep + '" at semver "' + sv + '" because it already exists at "' + declared[dep] + '" in ' + depType);
   }
+  if (conf.dependencies) flattenDependencies(declared, conf.dependencies, depType);
 }
 
-function removeNodeModulesDir(cb) {
-  rimraf(path.resolve(modulePath, "./node_modules"), cb);
-}
-
-function npmInstall(cb) {
-  childProcess.spawn('npm', ['install','-v'], { stdio: 'inherit' }).on('close', cb);
-}
-
-function flattenDependencies(declared, resolved) {
-  _.each(resolved, function(conf, dep) {
-    var sv = conf.from.split('@').pop();
-    if (!_.has(declared, dep)) {
-      console.log('Adding dependency "' + dep + '" at semver ' + sv);
-      declared[dep] = sv;
-    } else {
-      console.log('Skipping dependency "' + dep + '" at semver' + sv + ' because it already exists at ' + declared[dep]);
+function flattenDependencies(declared, resolved, depType) {
+  for (var d in resolved) {
+    if (resolved.hasOwnProperty(d)) {
+      flattener(resolved[d], d, declared, depType);
     }
-    if (conf.dependencies) flattenDependencies(declared, conf.dependencies);
-  });
+  }
   return declared;
 }
 
-childProcess.exec("npm ls --json", function(err, res) { 
-  console.log(flattenDependencies(pkg.dependencies, JSON.parse(res).dependencies));
-
-  if (!args.d) {
-    pkg.__fenestrate = {
-      comment: "This package.json file was modified by the `fenestrate` utility for Windows compatibility. The dependency graph was flattened to accommodate the 260-character limit on Windows file paths. The prior version of the `dependencies` is below.",
-      previous: {
-        dependencies: declaredDeps
-      }
-    }
-    fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-    console.log('Updated package.json. Reinstalling node_modules...');
-    removeNodeModulesDir(function() {
-      npmInstall(function(code) {
-        if (code !== 0) {
-          console.error("Error building new node_modules directory. Could not continue. Run `fenestrate -U` to get back to where you were.");
-          process.exit(1);
-        }
-        console.log("Installed newly fenestrated node_modules directory.")
-        process.exit(0);
+function reinstallNodeModules(p, cb, prod) {
+  rimraf(path.resolve(p, "./node_modules"), function(err) {
+    if (err) {
+      cb(err);
+    } else {
+      childProcess.spawn('npm', prod ? ['install','--production'] : ['install'], { cwd: p, stdio: 'inherit' }).on('close', function(code) {
+        cb(null, code);
       });
+    }
+  });
+}
+
+function die(why) {
+  console.error(why);
+  process.exit(1);
+}
+
+function clone(obj) {
+  if (!obj) return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+var commands = {
+  make: function(modPath, dry, cb) {
+    var pkg = require(path.resolve(modPath, './package.json'));
+    var f = pkg.__fenestrate;
+    if (!f) { 
+      f = pkg.__fenestrate = {
+        comment: "This package.json file was modified by the `fenestrate` utility for Windows compatibility. The flattened dependency graph was flattened to accommodate the 260-character limit on Windows file paths. If there is a `previous` dependency graph, this package has already been transformed."
+      }; 
+    }
+    if (f.previous) {
+      die('This package is already in a transformed state. Run `fenestrate restore` before running `fenestrate make` again.')
+    }
+
+    console.log('Reading installed dependencies for ' + modPath);
+    childProcess.exec("npm ls --json", { cwd: modPath }, function(err, res) {
+      if (err && !res) {
+        console.error("Failed to do initial listing of dependencies.");
+        die(err.message);
+      }
+      console.log('Successfully read dependencies.');
+      f.flattened = {};
+      res = JSON.parse(res);
+      dependencyTypes.forEach(function(type) {
+        if (pkg[type]) {
+          f.flattened[type] = flattenDependencies(clone(pkg[type]), res.dependencies, type);
+        }
+      });
+      var pkgString = JSON.stringify(pkg, null, 2);
+      if (dry) {
+        console.log(pkgString);
+        console.log('\n\nDry run only, making no changes.');
+      } else {
+        fs.writeFileSync(path.resolve(modPath, './package.json'), pkgString);
+        console.log('Updated package.json. This package can now be rewritten using `fenestrate rewrite`.');
+      }
+      if (cb) {
+        cb();
+      } else {
+        process.exit(0);
+      }
     });
-  } else {
-    console.log('Dry run only, making no changes.');
+  },
+  rewrite: function(modPath, restore, deep) {
+    var pkg = require(path.resolve(modPath, './package.json'));
+    var f = pkg.__fenestrate,
+    rewriteFrom = restore ? "previous" : "flattened",
+    saveTo = restore ? "flattened" : "previous";
+    if (!f || !f[rewriteFrom]) { 
+      die('A ' + rewriteFrom + ' configuration was never added to this package. Run `fenestrate make` and `fenestrate rewrite` before this command.');
+    }
+    if (!restore && f.previous) {
+      console.log('This package is already in a transformed state. Run `fenestrate restore` before running `fenestrate rewrite` again.')
+      process.exit(0);
+    }
+    if (restore && !f.previous) {
+      die('This package is not in a transformed state and cannot be restored.')
+    }
+    f[saveTo] = {};
+    dependencyTypes.forEach(function(type) {
+      if (pkg[type] && !f[rewriteFrom][type]) {
+        die('The package.json file has a "' + type + '" configuration, but there is no "' + type + '" present in the fenestrate config. Run `fenestrate make` again.');
+      }
+      f[saveTo][type] = clone(pkg[type]);
+      pkg[type] = clone(f[rewriteFrom][type]);
+    });
+    delete f[rewriteFrom];
+    console.log("Writing " + rewriteFrom + " package.json...");
+    fs.writeFileSync(path.resolve(modPath, './package.json'), JSON.stringify(pkg, null, 2));
+    console.log("Successfully saved " + rewriteFrom + " package.json. Rewriting node_modules directory...")
+    reinstallNodeModules(modPath, function(err, code) {
+      if (code !== 0) {
+        die("Error building " + rewriteFrom + " node_modules directory. Could not continue.");
+      }
+      console.log("Installed node_modules directory.")
+      if (deep) {
+        console.log('Recursing into node_modules directories. Hold tight.')
+        fs.readdirSync(path.resolve(modPath, './node_modules')).forEach(function(f) {
+          var p = path.resolve(modPath, './node_modules', f);
+          if (fs.statSync(p).isDirectory() && fs.existsSync(path.resolve(p, './node_modules')) && fs.existsSync(path.resolve(p, './package.json'))) {
+            console.log("Running make and rewrite on " + p);
+            commands.make(p, false, function() {
+              commands.rewrite(p, null, deep);
+            });
+          }
+        });
+      }
+      process.exit(0);
+    });
+  },
+  'rewrite-deep': function(modPath) {
+    commands.rewrite(modPath, false, true);
+  },
+  restore: function(modPath) {
+    commands.rewrite(modPath, true);
+  },
+  remove: function(modPath) {
+    var pkg = require(path.resolve(modPath, './package.json'));
+    if (!pkg.__fenestrate) {
+      die("Cannot remove fenestrate config because there isn't one present in package.json.")
+    }
+    if (pkg.__fenestrate.previous) {
+      die("Cannot remove fenestrate config because this package is in a transformed state. Run `fenestrate restore` before `fenestrate remove`.");
+    }
+    console.log("Removing fenestrate config from package.json...");
+    delete pkg.__fenestrate;
+    fs.writeFileSync(path.resolve(modPath, './package.json'), JSON.stringify(pkg, null, 2));
+    console.log("Saved package.json.");
     process.exit(0);
+  },
+  "dry-run": function(modPath) {
+    commands.make(modPath, true);
   }
-});
+};
+
+if (!commands[cmd]) {
+  console.error("Unrecognized command " + cmd).
+  console.log(helpText);
+  process.exit(1);
+}
+
+commands[cmd](modulePath);
