@@ -1,7 +1,6 @@
 var fs = require('fs'),
     path = require('path'),
     rimraf = require('rimraf'),
-    semver = require('semver'),
     childProcess = require("child_process"),
     cmdArgs = process.argv.slice(2),
     cmd = cmdArgs.shift(),
@@ -123,11 +122,14 @@ var commands = {
       }
     });
   },
-  rewrite: function(modPath, restore, done, prod) {
+  rewrite: function(modPath, restore, prod) {
     var pkg = require(path.resolve(modPath, './package.json'));
     var f = pkg.__fenestrate,
     rewriteFrom = restore ? "previous" : "flattened",
     saveTo = restore ? "flattened" : "previous";
+
+    if (prod) dependencyTypes.pop();
+
     if (!restore && f.previous) {
       console.log('This package is already in a transformed state. Run `fenestrate restore` before running `fenestrate rewrite` again.')
       process.exit(0);
@@ -154,45 +156,63 @@ var commands = {
       if (code !== 0) {
         die("Error building " + rewriteFrom + " node_modules directory. Could not continue.");
       }
+      if (restore) {
+        console.log('Done restoring original node_modules directory structure. Defenestration complete.')
+        process.exit(0);
+      }
       console.log("Installed node_modules directory. Recursing into it; hold tight.");
-      (function rewriteDeep(mPath, outerCb) {
-        fs.readdirSync(path.resolve(mPath, './node_modules')).reverse().reduceRight(function(cb, f) {
+      (function rewriteDeep(mPath, levels, outerCb) {
+        var mNMPath = path.resolve(mPath, './node_modules'),
+            levelsUp = 0;
+        fs.readdirSync(mNMPath).reverse().reduceRight(function(cb, subModule) {
           return function() {
-            var p = path.resolve(mPath, './node_modules', f),
-                parentPkgPath, parentPkg;
-            if (fs.statSync(p).isDirectory() && 
-            fs.existsSync(path.resolve(p, './node_modules')) &&
-            fs.existsSync(path.resolve(p, './package.json'))) {
-              parentPkgPath = path.resolve(p, '../../package.json');
-              parentPkg = fs.existsSync(parentPkgPath) && require(parentPkgPath);
-              if (
-              parentPkg &&
-              dependencyTypes.some(function(type){
-                return rootPkg[type] && rootPkg[type].hasOwnProperty(f) && !semver.satisfies(parentPkg.version, rootPkg[type][f])
-              }) &&
-              (!parentPkg.__fenestrate || !parentPkg.__fenestrate.previous)) {
-                var parentModulePath = path.resolve(p,'../../');
-                console.log('Detected that "' + f + '" has mutually incompatible versions in the tree, resulting in excess depth. Checking if we can make it shallower by rewriting ' + parentModulePath + '...');
-                commands.make(parentModulePath, false, function() {
-                  commands.rewrite(parentModulePath, false, cb, true);
-                });
+            var subModulePath = path.resolve(mNMPath, subModule);
+            if (
+                fs.statSync(subModulePath).isDirectory() &&
+                fs.existsSync(path.resolve(subModulePath, './node_modules')) &&
+                fs.existsSync(path.resolve(subModulePath, './package.json'))
+              ) {
+                // it's a real module
+                if (dependencyTypes.some(function(type){
+                  return pkg[type] && pkg[type].hasOwnProperty(subModule)
+                }) && levels > 2) {
+                  // it's already present in the root package. we don't need semver
+                  // to know that npm left it because it's an incompatible version
+                  // 
+                  // (and this won't ever work at the first layer of packages, so we count up)
+                  console.log('Detected that "' + subModule + '" has mutually incompatible versions in the tree, resulting in excess depth. Checking if we can make it shallower...');
+                  var ancestorToMoveTo = mNMPath;
+                  function logLookin() {
+                    console.log('Trying to find ' + subModule + ' above ' + ancestorToMoveTo);
+                    return true;
+                  }
+                  while (!(logLookin() && fs.existsSync(path.resolve(ancestorToMoveTo, '../../', subModule)))) { // go up until it's there
+                    ancestorToMoveTo = path.resolve(ancestorToMoveTo, '../../');
+                    if (++levelsUp > levels) {
+                      console.log("Didn't find the conflicting dependency higher up and we're at " + ancestorToMoveTo + ". Something's weird about " + subModule);
+                      return cb();
+                    }
+                  }
+                  console.log('Found the shallowest available directory for moving ' + subModule + ', at ' + ancestorToMoveTo);
+                  var newSubModulePath = path.resolve(ancestorToMoveTo, subModule);
+                  fs.renameSync(subModulePath, newSubModulePath)
+                  console.log("Successfully moved " + subModulePath + " to " + newSubModulePath);
+                  subModulePath = newSubModulePath;
+                }
+                rewriteDeep(subModulePath, ((levels - levelsUp) + 1), cb);
               } else {
-                rewriteDeep(p, cb)
+                cb();
               }
-            } else {
-              cb();
-            }
           };
         }, outerCb)();
-      })(modPath, function() {
-        if (done) {
-          done();
-        } else {
-          console.log("Done walking the tree for deep duplicates. Fenestration complete.")
-          process.exit(0);
-        }
+      })(modPath, 1, function() {
+        console.log("Done walking the tree for deep duplicates. Fenestration complete.")
+        process.exit(0);
       });
     });
+  },
+  'rewrite-prod': function(modPath) {
+    commands.rewrite(modPath, false, true);
   },
   restore: function(modPath) {
     commands.rewrite(modPath, true);

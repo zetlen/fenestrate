@@ -13,7 +13,7 @@
 
   Usage:
 
-  C:/some/long/path/to/module/> fenestrate create .
+  C:/some/long/path/> fenestrate make ./module
 
     
 
