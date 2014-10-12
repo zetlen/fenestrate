@@ -1,3 +1,21 @@
+/** fenestrate npm package utility for windows compat
+  *  (c) 2014 James Zetlen, every single right reserved
+  *
+  *  This program is free software: you can redistribute it and/or modify
+  *  it under the terms of the GNU General Public License as published by
+  *  the Free Software Foundation, either version 3 of the License, or
+  *  (at your option) any later version.
+  *
+  *  This program is distributed in the hope that it will be useful,
+  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  *  GNU General Public License for more details.
+  *
+  *  You should have received a copy of the GNU General Public License
+  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  *
+  */
+
 var fs = require('fs'),
     path = require('path'),
     rimraf = require('rimraf'),
@@ -5,7 +23,7 @@ var fs = require('fs'),
     cmdArgs = process.argv.slice(2),
     cmd = cmdArgs.shift(),
     modulePath = cmdArgs.shift(),
-    helpText = fs.readFileSync(path.resolve(__dirname, './help.txt'), 'utf-8'),
+    helpText = fs.readFileSync(path.resolve(__dirname, './README.md'), 'utf-8'),
     dependencyTypes = ["dependencies","devDependencies"];
 
 if (cmd === "help" || cmd === "-h" || !cmd) {
