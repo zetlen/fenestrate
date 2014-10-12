@@ -1,6 +1,7 @@
 var fs = require('fs'),
     path = require('path'),
     rimraf = require('rimraf'),
+    semver = require('semver'),
     childProcess = require("child_process"),
     cmdArgs = process.argv.slice(2),
     cmd = cmdArgs.shift(),
@@ -25,6 +26,8 @@ if (cmdArgs > 1) {
 
 modulePath = path.resolve(modulePath);
 
+var rootPkg = require(path.resolve(modulePath, './package.json'));
+
 if (!fs.existsSync(modulePath)) {
   die('Path "' + modulePath + '" does not exist.');
 }
@@ -35,14 +38,16 @@ if (!fs.existsSync(path.resolve(modulePath, './node_modules')) && cmd === "make"
 
 
 function flattener(conf, dep, declared, depType) {
-  var sv = conf.from.split('@').pop();
-  if (!declared.hasOwnProperty(dep)) {
-    console.log('Adding dependency "' + dep + '" at semver "' + sv + '" to ' + depType);
-    declared[dep] = sv;
-  } else {
-    console.log('Skipping dependency "' + dep + '" at semver "' + sv + '" because it already exists at "' + declared[dep] + '" in ' + depType);
+  if (conf && !conf.missing && conf.from) {
+    var sv = conf.from.split('@').pop();
+    if (!declared.hasOwnProperty(dep)) {
+      console.log('Adding dependency "' + dep + '" at semver "' + sv + '" to ' + depType);
+      declared[dep] = sv;
+    } else {
+      console.log('Skipping dependency "' + dep + '" at semver "' + sv + '" because it already exists at "' + declared[dep] + '" in ' + depType);
+    }
+    if (conf.dependencies) flattenDependencies(declared, conf.dependencies, depType);
   }
-  if (conf.dependencies) flattenDependencies(declared, conf.dependencies, depType);
 }
 
 function flattenDependencies(declared, resolved, depType) {
@@ -54,14 +59,14 @@ function flattenDependencies(declared, resolved, depType) {
   return declared;
 }
 
-function reinstallNodeModules(p, cb, prod) {
+function reinstallNodeModules(p, prod, cb) {
   rimraf(path.resolve(p, "./node_modules"), function(err) {
     if (err) {
       cb(err);
     } else {
       childProcess.spawn('npm', prod ? ['install','--production'] : ['install'], { cwd: p, stdio: 'inherit' }).on('close', function(code) {
         cb(null, code);
-      });
+      }); 
     }
   });
 }
@@ -75,6 +80,7 @@ function clone(obj) {
   if (!obj) return obj;
   return JSON.parse(JSON.stringify(obj));
 }
+
 var commands = {
   make: function(modPath, dry, cb) {
     var pkg = require(path.resolve(modPath, './package.json'));
@@ -117,20 +123,20 @@ var commands = {
       }
     });
   },
-  rewrite: function(modPath, restore, deep) {
+  rewrite: function(modPath, restore, done, prod) {
     var pkg = require(path.resolve(modPath, './package.json'));
     var f = pkg.__fenestrate,
     rewriteFrom = restore ? "previous" : "flattened",
     saveTo = restore ? "flattened" : "previous";
-    if (!f || !f[rewriteFrom]) { 
-      die('A ' + rewriteFrom + ' configuration was never added to this package. Run `fenestrate make` and `fenestrate rewrite` before this command.');
-    }
     if (!restore && f.previous) {
       console.log('This package is already in a transformed state. Run `fenestrate restore` before running `fenestrate rewrite` again.')
       process.exit(0);
     }
     if (restore && !f.previous) {
       die('This package is not in a transformed state and cannot be restored.')
+    }
+    if (!f || !f[rewriteFrom]) { 
+      die('A ' + rewriteFrom + ' configuration was never added to this package. Run `fenestrate make` and `fenestrate rewrite` before this command.');
     }
     f[saveTo] = {};
     dependencyTypes.forEach(function(type) {
@@ -144,28 +150,49 @@ var commands = {
     console.log("Writing " + rewriteFrom + " package.json...");
     fs.writeFileSync(path.resolve(modPath, './package.json'), JSON.stringify(pkg, null, 2));
     console.log("Successfully saved " + rewriteFrom + " package.json. Rewriting node_modules directory...")
-    reinstallNodeModules(modPath, function(err, code) {
+    reinstallNodeModules(modPath, prod, function(err, code) {
       if (code !== 0) {
         die("Error building " + rewriteFrom + " node_modules directory. Could not continue.");
       }
-      console.log("Installed node_modules directory.")
-      if (deep) {
-        console.log('Recursing into node_modules directories. Hold tight.')
-        fs.readdirSync(path.resolve(modPath, './node_modules')).forEach(function(f) {
-          var p = path.resolve(modPath, './node_modules', f);
-          if (fs.statSync(p).isDirectory() && fs.existsSync(path.resolve(p, './node_modules')) && fs.existsSync(path.resolve(p, './package.json'))) {
-            console.log("Running make and rewrite on " + p);
-            commands.make(p, false, function() {
-              commands.rewrite(p, null, deep);
-            });
-          }
-        });
-      }
-      process.exit(0);
+      console.log("Installed node_modules directory. Recursing into it; hold tight.");
+      (function rewriteDeep(mPath, outerCb) {
+        fs.readdirSync(path.resolve(mPath, './node_modules')).reverse().reduceRight(function(cb, f) {
+          return function() {
+            var p = path.resolve(mPath, './node_modules', f),
+                parentPkgPath, parentPkg;
+            if (fs.statSync(p).isDirectory() && 
+            fs.existsSync(path.resolve(p, './node_modules')) &&
+            fs.existsSync(path.resolve(p, './package.json'))) {
+              parentPkgPath = path.resolve(p, '../../package.json');
+              parentPkg = fs.existsSync(parentPkgPath) && require(parentPkgPath);
+              if (
+              parentPkg &&
+              dependencyTypes.some(function(type){
+                return rootPkg[type] && rootPkg[type].hasOwnProperty(f) && !semver.satisfies(parentPkg.version, rootPkg[type][f])
+              }) &&
+              (!parentPkg.__fenestrate || !parentPkg.__fenestrate.previous)) {
+                var parentModulePath = path.resolve(p,'../../');
+                console.log('Detected that "' + f + '" has mutually incompatible versions in the tree, resulting in excess depth. Checking if we can make it shallower by rewriting ' + parentModulePath + '...');
+                commands.make(parentModulePath, false, function() {
+                  commands.rewrite(parentModulePath, false, cb, true);
+                });
+              } else {
+                rewriteDeep(p, cb)
+              }
+            } else {
+              cb();
+            }
+          };
+        }, outerCb)();
+      })(modPath, function() {
+        if (done) {
+          done();
+        } else {
+          console.log("Done walking the tree for deep duplicates. Fenestration complete.")
+          process.exit(0);
+        }
+      });
     });
-  },
-  'rewrite-deep': function(modPath) {
-    commands.rewrite(modPath, false, true);
   },
   restore: function(modPath) {
     commands.rewrite(modPath, true);

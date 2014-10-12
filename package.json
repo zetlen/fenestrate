@@ -12,7 +12,8 @@
     "url": "https://github.com/zetlen/fenestrate.git"
   },
   "dependencies": {
-    "rimraf": "^2.2.8"
+    "rimraf": "^2.2.8",
+    "semver": "^4.0.3"
   },
   "main": "./fenestrate",
   "preferGlobal": true
