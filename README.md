@@ -11,6 +11,10 @@ creation will work. Run `npm install` before `fenestrate` if you haven't
 already installed the module in place. `fenestrate rewrite` on the other hand
 does not require installation first.**
 
+Installation:
+
+    npm install -g fenestrate
+
 Usage:
 
     C:/some/long/path/> fenestrate make ./module

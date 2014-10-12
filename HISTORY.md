@@ -3,3 +3,10 @@
 
  * initial release
  * available commands are `make`, `rewrite`, `restore`, `remove`
+
+
+0.2.0 / 2014/10/12
+------------------
+
+ * added changelog instructions and published to npm
+ 
