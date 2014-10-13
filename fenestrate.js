@@ -23,7 +23,7 @@ var fs = require('fs'),
     cmdArgs = process.argv.slice(2),
     cmd = cmdArgs.shift(),
     modulePath = cmdArgs.shift(),
-    helpText = fs.readFileSync(path.resolve(__dirname, './README.md'), 'utf-8'),
+    helpText = fs.readFileSync(path.resolve(__dirname, './README.md'), 'utf-8').split('<!-- cut here -->').shift(),
     dependencyTypes = ["dependencies","devDependencies"];
 
 if (cmd === "help" || cmd === "-h" || !cmd) {
@@ -148,15 +148,16 @@ var commands = {
 
     if (prod) dependencyTypes.pop();
 
-    if (!restore && f.previous) {
+    if (f && !restore && f.previous) {
       console.log('This package is already in a transformed state. Run `fenestrate restore` before running `fenestrate rewrite` again.')
       process.exit(0);
     }
-    if (restore && !f.previous) {
+    if (f && restore && !f.previous) {
       die('This package is not in a transformed state and cannot be restored.')
     }
     if (!f || !f[rewriteFrom]) { 
-      die('A ' + rewriteFrom + ' configuration was never added to this package. Run `fenestrate make` and `fenestrate rewrite` before this command.');
+      console.log('A ' + rewriteFrom + ' configuration was never added to this package.');
+      process.exit(0);
     }
     f[saveTo] = {};
     dependencyTypes.forEach(function(type) {
