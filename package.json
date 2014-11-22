@@ -3,7 +3,7 @@
   "title": "fenestrate",
   "author": "James Zetlen",
   "description": "Flatten the dependency tree of an NPM module so it can fit into the Windows 260-character path limitation.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "bin": {
     "fenestrate": "./bin/fenestrate"
   },
@@ -12,6 +12,7 @@
     "url": "https://github.com/zetlen/fenestrate.git"
   },
   "dependencies": {
+    "minimist": "^1.1.0",
     "rimraf": "^2.2.8"
   },
   "main": "./fenestrate",

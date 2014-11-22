@@ -23,6 +23,7 @@ var fs = require('fs'),
     cmdArgs = process.argv.slice(2),
     cmd = cmdArgs.shift(),
     modulePath = cmdArgs.shift(),
+    windows = /^win/.test(process.platform),
     helpText = fs.readFileSync(path.resolve(__dirname, './README.md'), 'utf-8').split('<!-- cut here -->').shift(),
     dependencyTypes = ["dependencies","devDependencies"];
 
@@ -78,10 +79,15 @@ function flattenDependencies(declared, resolved, depType) {
 
 function reinstallNodeModules(p, prod, cb) {
   rimraf(path.resolve(p, "./node_modules"), function(err) {
+
+    var cmd = prod ? "npm install --production" : "npm install",
+      args = ((windows ? "cmd /c " : "") + cmd).split(' ');
+
     if (err) {
       cb(err);
     } else {
-      childProcess.spawn('npm', prod ? ['install','--production'] : ['install'], { cwd: p, stdio: 'inherit' }).on('close', function(code) {
+
+      childProcess.spawn(args[0], args.slice(1), { cwd: p, stdio: 'inherit' }).on('close', function(code) {
         cb(null, code);
       }); 
     }
