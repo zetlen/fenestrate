@@ -3,7 +3,7 @@
   "title": "fenestrate",
   "author": "James Zetlen",
   "description": "Flatten the dependency tree of an NPM module so it can fit into the Windows 260-character path limitation.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "bin": {
     "fenestrate": "./bin/fenestrate"
   },

@@ -21,15 +21,15 @@ Usage:
 
 (Of course it works on *nix systems as well.)
 
-Commands:
+Common Commands:
 
 
 `make`    updates the package.json file in the current directory to contain a
           __fenestrate configuration that can be used to rewrite the
           node_modules directory later, using `fenestrate rewrite`.
 
-`rewrite` rewrites package.json and the node_modules directory to use the
-          flatter dependency graph present in the __fenestrate configuration.
+`rewrite` rewrites the node_modules directory to use the flattest possible
+          dependency graph. requires `make` first.
 
 `restore` defenestrates! It undoes the changes written to your node_modules by
           `fenestrate rewrite`.
