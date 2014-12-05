@@ -49,7 +49,7 @@ if (!fs.existsSync(path.resolve(modulePath, './node_modules')) && cmd === "make"
 }
 
 function log(str) {
-  process.stderr.write(str);
+  process.stderr.write(str + "\n");
 }
 
 function flattener(conf, dep, declared, depType) {
@@ -183,6 +183,7 @@ var commands = {
     shunt(modPath, true, prod);
   },
   rewrite: function(modPath, restore, prod) {
+    var pkg = require(path.resolve(modPath, './package.json'));
     log("Rewriting node_modules directory...")
     reinstallNodeModules(modPath, prod, function(err, code) {
       if (code !== 0) {
