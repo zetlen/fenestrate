@@ -101,7 +101,7 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-function shunt(modp, restore, prod) {
+function shunt(modPath, restore, prod) {
   var pkg = require(path.resolve(modPath, './package.json'));
   var f = pkg.__fenestrate,
   rewriteFrom = restore ? "previous" : "flattened",
