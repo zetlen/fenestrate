@@ -179,7 +179,7 @@ var commands = {
   activate: function(modPath, prod) {
     shunt(modPath, false, prod);
   },
-  deactivate: function(modpath, prod) {
+  deactivate: function(modPath, prod) {
     shunt(modPath, true, prod);
   },
   rewrite: function(modPath, restore, prod) {
