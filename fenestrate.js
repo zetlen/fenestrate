@@ -148,7 +148,7 @@ var commands = {
     }
 
     log('Reading installed dependencies for ' + modPath);
-    childProcess.exec("npm ls --json", { cwd: modPath }, function(err, res) {
+    childProcess.exec("npm ls --json", { maxBuffer: 1024 * 4096, cwd: modPath }, function(err, res) {
       if (err && !res) {
         console.error("Failed to do initial listing of dependencies.");
         die(err.message);
