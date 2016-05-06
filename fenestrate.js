@@ -282,7 +282,7 @@ var commands = {
 };
 
 if (!commands[cmd]) {
-  console.error("Unrecognized command " + cmd).
+  console.error("Unrecognized command " + cmd);
   log(helpText);
   process.exit(1);
 }
