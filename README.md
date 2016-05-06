@@ -26,10 +26,20 @@ Common Commands:
 
 `make`    updates the package.json file in the current directory to contain a
           __fenestrate configuration that can be used to rewrite the
-          node_modules directory later, using `fenestrate rewrite`.
+          node_modules directory later, using `fenestrate rewrite-full`.
 
 `rewrite` rewrites the node_modules directory to use the flattest possible
-          dependency graph. requires `make` first.
+          dependency graph for the dependencies. requires `make` first.
+
+`rewrite-prod` does what `rewrite` does, but skips `devDependencies`.
+
+`rewrite-full` swaps out the fenestrated package.json before performing a
+          `rewrite`, resulting in the flattest possible dependency graph.
+          it may lead to instability if your dependencies are doing anything
+          strange, but it is the most aggressive algorithm.
+
+`rewrite-prod-full` does what `rewrite-full` does, but skips
+          `devDependencies`.
 
 `restore` defenestrates! It undoes the changes written to your node_modules by
           `fenestrate rewrite`.
@@ -40,10 +50,6 @@ Common Commands:
           make them.
 
 `help`    prints this help text.
-
-You must always give fenestrate a path. It can be an absolute or relative
-path, but it will never assume you should use the working directory, since
-its operations can be (reversibly) destructive.
 
 <!-- cut here -->
 
