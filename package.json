@@ -15,5 +15,6 @@
     "rimraf": "^2.2.8"
   },
   "main": "./fenestrate",
-  "preferGlobal": true
+  "preferGlobal": true,
+  "license": "GPL-2.0"
 }
